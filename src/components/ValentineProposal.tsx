@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react";
-import { motion, useAnimation, useMotionValue, animate, useSpring } from "framer-motion";
+import { motion, useSpring } from "framer-motion";
 import Image from "next/image";
 
 const messages = [
@@ -19,6 +19,7 @@ const messages = [
 export default function ValentineProposal() {
   const [messageIndex, setMessageIndex] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [isNoButtonDisabled, setIsNoButtonDisabled] = useState(false);
   const buttonRef = useRef(null);
   const containerRef = useRef(null);
   const buttonX = useSpring(0, { stiffness: 300, damping: 30 });
@@ -27,7 +28,7 @@ export default function ValentineProposal() {
 
   useEffect(() => {
     const handleMouseMove = (e) => {
-      if (!buttonRef.current || !containerRef.current || isEvading) return;
+      if (!buttonRef.current || !containerRef.current || isEvading || isNoButtonDisabled) return;
 
       const buttonRect = buttonRef.current.getBoundingClientRect();
       const containerRect = containerRef.current.getBoundingClientRect();
@@ -44,9 +45,40 @@ export default function ValentineProposal() {
       }
     };
 
+    const handleTouchStart = (e) => {
+      if (!buttonRef.current || !containerRef.current || isEvading || isNoButtonDisabled) return;
+
+      const touch = e.touches[0];
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const containerRect = containerRef.current.getBoundingClientRect();
+
+      if (!buttonRect || !containerRect) return;
+
+      const buttonCenterX = buttonRect.left + buttonRect.width / 2;
+      const buttonCenterY = buttonRect.top + buttonRect.height / 2;
+      const distance = Math.hypot(touch.clientX - buttonCenterX, touch.clientY - buttonCenterY);
+
+      if (distance < 150) {
+        setIsEvading(true);
+        evadeMouse(touch.clientX, touch.clientY, containerRect, buttonRect);
+      }
+    };
+
     window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [isEvading]);
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("touchstart", handleTouchStart);
+    };
+  }, [isEvading, isNoButtonDisabled]);
+
+  useEffect(() => {
+    const noButtonState = localStorage.getItem("noButtonDisabled");
+    if (noButtonState === "true") {
+      setIsNoButtonDisabled(true);
+    }
+  }, []);
 
   const evadeMouse = (mouseX, mouseY, containerRect, buttonRect) => {
     if (!buttonRef.current) return;
@@ -64,6 +96,24 @@ export default function ValentineProposal() {
     setTimeout(() => setIsEvading(false), 1000);
   };
 
+  const handleYesButtonClick = () => {
+    setShowConfetti(true);
+    setIsNoButtonDisabled(true);
+    localStorage.setItem("noButtonDisabled", "true");
+  };
+
+  const handleRefresh = () => {
+    setIsNoButtonDisabled(false);
+    localStorage.removeItem("noButtonDisabled");
+  };
+
+  useEffect(() => {
+    window.addEventListener("beforeunload", handleRefresh);
+    return () => {
+      window.removeEventListener("beforeunload", handleRefresh);
+    };
+  }, []);
+
   return (
     <div ref={containerRef} className="relative min-h-screen w-full flex items-center justify-center bg-pink-50 overflow-hidden">
       <div className="w-80 p-6 rounded-3xl bg-white shadow-xl border-4 border-pink-200">
@@ -71,13 +121,14 @@ export default function ValentineProposal() {
           <Image src="https://media.giphy.com/media/DaNoT1EDKptwk/giphy.gif?cid=ecf05e47zt4femabr9b25ij6z2plkx2aqbjdb4w0im7azsig&ep=v1_gifs_search&rid=giphy.gif&ct=g" alt="Cute panda with heart eyes" width={200} height={200} className="w-40 h-40 object-contain" />
           <h1 className="text-xl font-bold text-center">{messages[messageIndex]}</h1>
           <div className="flex gap-4 items-center">
-            <button onClick={() => setShowConfetti(true)} className="px-8 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors">
+            <button onClick={handleYesButtonClick} className="px-8 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors">
               Yes
             </button>
             <motion.button
               ref={buttonRef}
               style={{ x: buttonX, y: buttonY }}
               className="px-8 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+              disabled={isNoButtonDisabled}
             >
               No
             </motion.button>
